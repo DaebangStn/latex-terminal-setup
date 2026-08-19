@@ -16,16 +16,28 @@
 #    working/idle state, agent prompt/wait and notifications.
 #
 # usage: hrmath claude [args...] | hrmath codex [args...] | hrmath --read f.md
-TFORMULA_CLI=${TFORMULA_CLI:-/home/geon/.nvm/versions/node/v24.13.1/lib/node_modules/tformula/dist/cli.js}
 export TERM_PROGRAM=ghostty
 
-# On this 4K screen a cell is ~18x38px, so ordinary one-line formulas fit at
-# ~0.398 and TFormula's default 0.4 floor keeps them as raw TeX. Lower it, but
-# let the caller override: HRMATH_MIN_SCALE=0.4 hrmath claude
+# On a 4K screen a cell is ~18x38px, so ordinary one-line formulas fit at ~0.398
+# and TFormula's default 0.4 floor keeps them as raw TeX. Lower it, but let the
+# caller override: HRMATH_MIN_SCALE=0.4 hrmath claude
 MIN_SCALE=${HRMATH_MIN_SCALE:-0.3}
 
-if [ ! -f "$TFORMULA_CLI" ]; then      # node version bumped? fall back to PATH
-  exec tformula "$@"
+# Resolve TFormula's entry script. `exec -a` has to invoke node on the script
+# itself: running the `tformula` PATH shim would leave "tformula" in argv[0] and
+# herdr would stop recognizing the agent. The shim is a symlink straight to
+# dist/cli.js, so readlink resolves it with no npm call and nothing hardcoded.
+if [ -z "${TFORMULA_CLI:-}" ]; then
+  shim=$(command -v tformula 2>/dev/null) && TFORMULA_CLI=$(readlink -f "$shim")
+fi
+case "${TFORMULA_CLI:-}" in
+  *.js) ;;                                  # good
+  *) TFORMULA_CLI="$(npm root -g 2>/dev/null)/tformula/dist/cli.js" ;;
+esac
+if [ ! -f "$TFORMULA_CLI" ]; then
+  echo "hrmath: TFormula not found. Install it with: npm install -g tformula" >&2
+  echo "        or point TFORMULA_CLI at its dist/cli.js" >&2
+  exit 1
 fi
 
 case "$1" in

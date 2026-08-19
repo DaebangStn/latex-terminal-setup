@@ -49,28 +49,14 @@ case ":$PATH:" in
   *) warn "~/.local/bin is not on PATH -- add it to ~/.zshrc" ;;
 esac
 
-# hrmath resolves TFormula through a hardcoded path so it can use `exec -a`
-# (see SETUP.md step 4). That path is per-machine, so rewrite it here.
-cli=$(npm root -g)/tformula/dist/cli.js
-if [ -f "$cli" ]; then
-  if grep -q "TFORMULA_CLI:-$cli}" "$HOME/.local/bin/hrmath"; then
-    keep "hrmath TFORMULA_CLI already points at $cli"
-  else
-    python3 - "$HOME/.local/bin/hrmath" "$cli" <<'PY'
-import re, sys, pathlib
-p, cli = pathlib.Path(sys.argv[1]), sys.argv[2]
-s = p.read_text()
-new = re.sub(r'TFORMULA_CLI=\$\{TFORMULA_CLI:-[^}]*\}',
-             'TFORMULA_CLI=${TFORMULA_CLI:-%s}' % cli, s, count=1)
-if new == s:
-    raise SystemExit("could not rewrite TFORMULA_CLI in %s" % p)
-p.write_text(new)
-PY
-    [ $? -eq 0 ] && add "hrmath TFORMULA_CLI -> $cli" || warn "left hrmath's TFORMULA_CLI as-is"
-  fi
+# hrmath resolves TFormula from the `tformula` PATH shim (a symlink to
+# dist/cli.js), so there is nothing machine-specific to rewrite. Just confirm it
+# resolves -- if it cannot, hrmath refuses to run rather than silently dropping
+# the argv[0] spoof that herdr's agent detection depends on.
+if shim=$(command -v tformula 2>/dev/null) && [ -f "$(readlink -f "$shim")" ]; then
+  keep "hrmath will resolve TFormula via $shim"
 else
-  warn "cli.js not found under $(npm root -g)/tformula -- hrmath will fall back to PATH"
-  warn "that fallback drops the argv[0] spoof, so herdr stops detecting the agent"
+  warn "tformula not resolvable on PATH -- hrmath will refuse to start"
 fi
 
 echo "== herdr config =="

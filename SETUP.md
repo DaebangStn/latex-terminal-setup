@@ -138,10 +138,12 @@ would render below 0.4 of natural size. On a 4K screen a cell is ~18x38px and an
 ordinary one-line formula lands at ~0.398, just under the default. Override per
 run with `HRMATH_MIN_SCALE`.
 
-`hrmath` resolves TFormula through a hardcoded path and falls back to `tformula`
-on `PATH` if it is gone. **The fallback loses both the `exec -a` spoof and the
-scale flag**, so a Node upgrade silently breaks detection while rendering keeps
-working. Point `TFORMULA_CLI` at the new path when you bump Node.
+`hrmath` finds TFormula by resolving the `tformula` shim on `PATH`, which is a
+symlink straight to `dist/cli.js` — nothing machine-specific, and no `npm` call on
+the hot path. It has to invoke `node` on that script rather than the shim, because
+running the shim would leave `tformula` in `argv[0]` and break detection. If it
+cannot resolve, it exits with a message instead of quietly running unwrapped.
+Override with `TFORMULA_CLI` if your install is unusual.
 
 ## 5. Wrap the agents by default
 
@@ -198,7 +200,6 @@ Ordered by how likely each is, and all of them fail *quietly*:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Formulas render, pane missing from sidebar | Node upgraded; `hrmath` fell back and lost `exec -a` | Point `TFORMULA_CLI` at the new path |
 | Formulas turn blue/dark again | `npm update -g tformula` reverted the patch | Re-run `patch-tformula.sh` |
 | Formulas stop rendering entirely on Windows | Connected through ConPTY again | Use WezTerm's built-in SSH |
 | Formulas stay as raw TeX | Fitted scale below the floor | Lower `HRMATH_MIN_SCALE` |
