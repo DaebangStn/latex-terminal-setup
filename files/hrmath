@@ -1,0 +1,39 @@
+#!/bin/bash
+# Run a CLI agent under TFormula so LaTeX renders as images inside herdr.
+#
+# Two things have to be faked, both for good reason:
+#
+# 1. TERM_PROGRAM=ghostty — TFormula gates the Kitty graphics protocol on
+#    /ghostty|kitty|wezterm/ matching "$TERM $TERM_PROGRAM" (probe.js:231-241).
+#    A herdr pane reports the OUTER terminal, but herdr's pane terminal *is*
+#    Ghostty's core and answers the a=q query with OK, so this is accurate.
+#
+# 2. argv[0] = the agent kind — herdr identifies a pane's agent from the
+#    foreground process's argv[0] (verified: a process with comm=sleep and
+#    argv[0]=claude is detected as Claude). TFormula runs the agent inside its
+#    own inner pty, so herdr would otherwise see only "node .../tformula" and
+#    the pane would never appear in `herdr agent list`, breaking hrname,
+#    working/idle state, agent prompt/wait and notifications.
+#
+# usage: hrmath claude [args...] | hrmath codex [args...] | hrmath --read f.md
+TFORMULA_CLI=${TFORMULA_CLI:-/home/geon/.nvm/versions/node/v24.13.1/lib/node_modules/tformula/dist/cli.js}
+export TERM_PROGRAM=ghostty
+
+# On this 4K screen a cell is ~18x38px, so ordinary one-line formulas fit at
+# ~0.398 and TFormula's default 0.4 floor keeps them as raw TeX. Lower it, but
+# let the caller override: HRMATH_MIN_SCALE=0.4 hrmath claude
+MIN_SCALE=${HRMATH_MIN_SCALE:-0.3}
+
+if [ ! -f "$TFORMULA_CLI" ]; then      # node version bumped? fall back to PATH
+  exec tformula "$@"
+fi
+
+case "$1" in
+  pi|claude|codex|gemini|cursor|devin|cline|opencode|copilot|kimi|kiro|droid|amp|grok|kilo|qodercli|qoder|hermes|maki|agy|omp|mastracode)
+    kind=$1; shift
+    exec -a "$kind" node "$TFORMULA_CLI" --min-readable-scale "$MIN_SCALE" "$kind" "$@"
+    ;;
+  *)
+    exec node "$TFORMULA_CLI" --min-readable-scale "$MIN_SCALE" "$@"
+    ;;
+esac

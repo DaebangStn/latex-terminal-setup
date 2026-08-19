@@ -1,0 +1,16 @@
+[ui]
+# Draw Herdr's own cursor instead of the outer terminal's native cursor.
+# Default "auto" only draws on Windows/WSL and uses the native cursor on Linux,
+# so a pane app requesting a blinking cursor via DECSCUSR (Claude Code does)
+# blinks in the outer terminal. "drawn" renders it as cell content: no blink.
+host_cursor = "drawn"
+
+[ui.sound]
+enabled = true
+
+# Render Kitty-graphics images (e.g. TFormula's LaTeX overlays) to the attached
+# client. Verified: herdr decodes the pane's image and re-emits it as ESC_G.
+# Needs a Kitty-graphics outer terminal (Ghostty/kitty) to actually show up;
+# VTE terminals like Guake silently ignore the APC sequences.
+[experimental]
+kitty_graphics = true

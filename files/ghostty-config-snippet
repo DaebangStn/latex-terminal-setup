@@ -1,0 +1,8 @@
+# Palette: the Ghostty default (Tomorrow Night) reads muddy here.
+# `ghostty +list-themes` previews all 463; `ctrl+shift+,` reloads without restart.
+theme = 12-bit Rainbow
+# 12-bit Rainbow's blue (#3060b0) is darker than Ghostty's default and turns
+# unreadable once an app colors text with ANSI blue. Overrides win over `theme`
+# because they come after it.
+palette = 4=#6a9fe0
+palette = 12=#8ab8f0

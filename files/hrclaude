@@ -1,0 +1,18 @@
+#!/bin/sh
+# Launch claude under TFormula so LaTeX renders as Kitty-graphics images.
+#
+# Trade-off, measured: herdr identifies a pane's agent by its foreground
+# process, and TFormula runs the agent inside its own inner pty, so the pane
+# reports `node .../tformula` and herdr never registers an agent. That costs
+# the sidebar entry and name, the idle/working/blocked state, and
+# `herdr agent prompt/wait/read`. `herdr pane run/read/send-keys` still work,
+# and codex's own agent-inbox `notify` hook is unaffected.
+#
+# Plain `claude` stays unwrapped so herdr detection keeps working.
+
+# tformula refuses to nest; inside an existing proxy just run the agent.
+if [ "${TFORMULA_ACTIVE:-}" = "1" ]; then
+  exec claude "$@"
+fi
+
+exec hrmath claude "$@"
