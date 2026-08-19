@@ -76,6 +76,19 @@ turn and repaint everything when you scroll. So in an agent conversation, expect
 looks like the newest ones rendering and the older ones failing is one mechanism,
 not two.
 
+**Who actually drops it.** Not the agent, and not TFormula either. The agent only
+emits the escape — `ED 2`/`ED 3`, or an alternate-screen switch (`DECSET 1049` on
+entry, `1047` on exit). **Ghostty** is what deletes the pixels: its ED
+implementation discards all Kitty image data for the active screen. TFormula
+watches the same sequence go past and clears its own bookkeeping to match
+(`screen.js:1433`), because a retained id would become a zombie whose later `a=p`
+fails with `ENOENT`. Hence the log says `forgot`, not `deleted` — it is reconciling
+with a deletion someone else performed.
+
+That is also why this is the opposite of caveat 9's stale overlay: here a clear
+happened and the image is gone; there no clear happened, so the image stayed while
+the text beneath it changed.
+
 **Fix.** None, and none is needed. Image lifetime is tied to a screen the TUI owns.
 Confirm it is this and not real corruption by checking the source text: if the
 delimiters and every character are present (no `# ` prefix, no missing `=`; compare
@@ -229,23 +242,39 @@ glyphs in the middle. Relevant code: `dollarDelimiterPositions()`
 **Fix.** At most one inline `$...$` per line, and never mixed with CJK prose — put
 formulas in separate display blocks. Encoded in the agents' instruction files.
 
-## 9. Stray little images around a formula → wrapped source in a narrow pane
+## 9. A tiny formula image sitting on top of unrelated text
 
-**Cause.** When a display formula's raw source wraps across several terminal lines
-in a narrow pane, TFormula also infers fragments of the wrapped text as separate
-inline formulas and renders them. Observed right after a correctly formatted
-three-line `$$` block in a half-width pane:
+**Cause, part one: over-eager inference.** TFormula infers inline math from text
+that was never meant as math. Anything shaped like a fraction or an expression
+qualifies. Recorded from ordinary agent output:
 
 ```
-display=False | \mathbf{r},t
-display=False | \mathbf{r},t\text{ =}
-display=False | ↓
+display=False | conf=inferred | 2/3
+display=False | conf=inferred | 1/3
+display=False | conf=inferred | study_root / "control.json", {"mode": "run", ...}
+display=False | conf=inferred | \mathbf{r},t\text{ =}
+display=False | conf=inferred | ↓
 ```
 
-Harmless — the display formula itself is fine — but the strays are visible.
-Probably the same root cause as caveat 8.
+**Part two: the placement goes stale.** No clear happens, so neither Ghostty nor
+TFormula drops the image (contrast caveat 2, where a clear *does* happen and the
+image is correctly discarded). The text underneath is then replaced by something
+else and the image stays put. Observed: a typeset `2/3` sitting over the middle of
 
-**Fix.** Wider panes for math-heavy output, or shorter formulas.
+```
+MCP startup interrupted. The following servers were not initialized: serena
+```
+
+covering the `ed. T`, so the line read `...tup interrupt` `[2/3]` `he following`.
+`#placementIsVisible` tracks whether a placement is still in the viewport, but not
+whether the characters it was anchored to are still the same characters.
+
+Narrow panes make it worse: a wrapped display formula gives the inference engine
+more fragments to chew on.
+
+**Fix.** Nothing configurable — there is no flag to require explicit delimiters and
+skip inferred math, which is what would actually solve it. Wider panes help; so does
+scrolling or clearing the pane to flush a stray that is already stuck.
 
 ## 10. Formulas look chewed or partially erased in WezTerm
 
