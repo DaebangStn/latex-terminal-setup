@@ -49,7 +49,43 @@ this way and all came back intact. The corruption needs an agent's Markdown stag
 keep the formula body on a single line and use `\\` for breaks inside the
 formula. See `files/claude-md-snippet.md`.
 
-## 2. Formulas turn blue again → the tformula patch was reverted
+## 2. Scrolled-back formulas show as raw TeX → the images were dropped, not corrupted
+
+**This is the one most likely to look like a bug and not be one.** The raw TeX
+always stays in the cell layer underneath the image, so when an image is dropped
+the source reappears, intact. Nothing is lost; nothing is broken.
+
+What decides whether an image survives, measured from the debug log:
+
+```
+[tformula] rendered explicit formula at normal:0:0 (1476x114px, fit 1.000)
+[tformula] terminal text clear retained normal scrollback formula images   <- pushed 60 lines up
+[tformula] terminal clear forgot normal formula images                     <- ran `clear`
+```
+
+- **Plain shell, normal buffer:** scrollback **keeps** the images. Scroll up and the
+  rendered formula is still there. herdr cooperates — it clips placements against
+  the scrollback offset.
+- **An explicit `clear`:** images are forgotten.
+- **Alternate screen:** forgotten on clear too —
+  `alternate-screen clear forgot alternate formula images`.
+
+Agent TUIs are the alternate-screen case, and they repaint their region on every
+turn and repaint everything when you scroll. So in an agent conversation, expect
+**only the freshest formula to be an image**; older ones revert to source. What
+looks like the newest ones rendering and the older ones failing is one mechanism,
+not two.
+
+**Fix.** None, and none is needed. Image lifetime is tied to a screen the TUI owns.
+Confirm it is this and not real corruption by checking the source text: if the
+delimiters and every character are present (no `# ` prefix, no missing `=`; compare
+caveat 1), it simply has not been re-rendered.
+
+**Not isolated:** exactly which repaints or clears codex and Claude Code issue, and
+when. The observed pattern is consistent with the log lines above, but the precise
+trigger was never pinned down.
+
+## 3. Formulas turn blue again → the tformula patch was reverted
 
 **Cause.** The formula image inherits the color of the source *cells*. A
 syntax-highlighted LaTeX block in an agent TUI therefore paints the formula in the
@@ -72,7 +108,7 @@ terminal default foreground, or expose an option. The reader path
 (`reader.js:509`) already does the right thing; only the proxy path
 (`screen.js:2067`) takes the source color.
 
-## 3. Formulas render but the pane is missing from the sidebar → argv[0] detection changed
+## 4. Formulas render but the pane is missing from the sidebar → argv[0] detection changed
 
 **Cause.** herdr identifies a pane's agent from the foreground process's
 **`argv[0]`**, not `comm` — measured: `exec -a claude sleep 300` is detected as
@@ -106,7 +142,7 @@ works:
 Filing a herdr feature request is not currently possible: it has no public issue
 tracker.
 
-## 4. Formulas stop rendering entirely from Windows → ConPTY is back in the path
+## 5. Formulas stop rendering entirely from Windows → ConPTY is back in the path
 
 **Cause.** `wezterm → wsl.exe → ssh` routes through **ConPTY**, which is not a
 pipe but a terminal emulator: it parses the stream, keeps its own screen buffer,
@@ -125,7 +161,7 @@ replies:
 **Fix.** Use WezTerm's built-in SSH client (SETUP.md step 1), which bypasses both
 WSL and ConPTY.
 
-## 5. Formulas stay as raw TeX → fitted scale below the floor
+## 6. Formulas stay as raw TeX → fitted scale below the floor
 
 **Cause.** TFormula keeps a formula as raw TeX when it would render below
 `--min-readable-scale` (default 0.4) of natural size. On a 4K screen a cell is
@@ -139,7 +175,11 @@ line is explicit:
 **Fix.** `hrmath` already defaults it to 0.3. Override per run with
 `HRMATH_MIN_SCALE`.
 
-## 6. Display formulas look too small → the image is bounded by the source's cell rectangle
+**Not to be confused with caveat 2**, which has the same symptom. This one never
+rendered — the log says `kept raw TeX`. That one rendered and the image was later
+dropped, so the log has a matching `rendered` line.
+
+## 7. Display formulas look too small → the image is bounded by the source's cell rectangle
 
 **Cause.** TFormula bounds the rendered image to the cell rectangle the source
 text occupies, so a one-line `$$...$$` gets a single row of height and the glyphs
@@ -166,7 +206,7 @@ instruction files: display delimiters go on their own lines. See
 **What an upstream fix would look like.** Let a display formula claim more rows
 than its source occupies, or expose a minimum row count.
 
-## 7. An inline formula "does not render" → several `$...$` on one line got merged
+## 8. An inline formula "does not render" → several `$...$` on one line got merged
 
 **Cause.** TFormula joins several dollar-delimited spans on a single line into one
 formula and wraps the text between them in `\text{}`. MathJax has no CJK glyphs,
@@ -189,7 +229,7 @@ glyphs in the middle. Relevant code: `dollarDelimiterPositions()`
 **Fix.** At most one inline `$...$` per line, and never mixed with CJK prose — put
 formulas in separate display blocks. Encoded in the agents' instruction files.
 
-## 8. Stray little images around a formula → wrapped source in a narrow pane
+## 9. Stray little images around a formula → wrapped source in a narrow pane
 
 **Cause.** When a display formula's raw source wraps across several terminal lines
 in a narrow pane, TFormula also infers fragments of the wrapped text as separate
@@ -203,11 +243,11 @@ display=False | ↓
 ```
 
 Harmless — the display formula itself is fine — but the strays are visible.
-Probably the same root cause as caveat 7.
+Probably the same root cause as caveat 8.
 
 **Fix.** Wider panes for math-heavy output, or shorter formulas.
 
-## 9. Formulas look chewed or partially erased in WezTerm
+## 10. Formulas look chewed or partially erased in WezTerm
 
 **Cause.** WezTerm implements the Kitty graphics protocol only partially: it maps
 an image to cells at placement time, so text later drawn over those cells punches
@@ -218,7 +258,7 @@ Ghostty do not behave this way. Upstream:
 **Fix.** None on our side. This is why local Ghostty is the recommended setup and
 WezTerm is only the remote route.
 
-## 10. `verify.sh` reports `math=false` on a working setup → stdout was redirected
+## 11. `verify.sh` reports `math=false` on a working setup → stdout was redirected
 
 **Cause.** TFormula gates on `isTTY` and needs the terminal to answer the
 cell-size query, so `./verify.sh > log` or piping it makes every render check fail
@@ -227,7 +267,7 @@ that case, but it is worth knowing why.
 
 **Fix.** Run it bare, from a herdr pane.
 
-## 11. One pane's background is oddly tinted — root cause unidentified
+## 12. One pane's background is oddly tinted — root cause unidentified
 
 **Cause.** An app inside that pane set a default background via OSC 11 and never
 reset it. herdr tracks that per pane and carries it to the client
