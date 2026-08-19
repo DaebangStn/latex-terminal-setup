@@ -11,7 +11,10 @@ TFormula (PTY proxy: finds TeX, renders it via MathJax, emits a Kitty image)
 ```
 
 Every link has to hold. `files/verify.sh` checks all of them and names the one
-that broke, so start there when something stops working.
+that broke, so start there when something stops working — then look up the symptom
+in [CAVEATS.md](CAVEATS.md), which lists every known failure mode with its cause,
+its evidence, and what to do about it. Most of them fail *quietly*, so the symptom
+rarely points at the cause on its own.
 
 ## Quick start on a fresh machine
 
@@ -196,39 +199,10 @@ Expected: **11 passed, 0 failed**, including `math=true`,
 
 ## When it breaks later
 
-Ordered by how likely each is, and all of them fail *quietly*:
+See [CAVEATS.md](CAVEATS.md). It is ordered by likelihood and each entry leads with
+the symptom, because these failures are quiet: the setup keeps half-working and
+nothing points at the cause.
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Formulas turn blue/dark again | `npm update -g tformula` reverted the patch | Re-run `patch-tformula.sh` |
-| Formulas stop rendering entirely on Windows | Connected through ConPTY again | Use WezTerm's built-in SSH |
-| Formulas stay as raw TeX | Fitted scale below the floor | Lower `HRMATH_MIN_SCALE` |
-| Pane missing from sidebar, no Node change | herdr now matches `comm` or the exe path | Drop `exec -a` from `hrmath`; detection under a proxy is then unrecoverable |
-
-`argv[0]`-based detection is observed behavior, not a documented herdr contract.
-Two alternatives were measured and do **not** work:
-
-- Manifest `aliases` are *kind* aliases for manifest lookup, not process names,
-  and the kind list is compiled into the binary. Local overrides do load from
-  `~/.config/herdr/agent-detection/<id>.toml`, but they freeze remote rule
-  updates for that agent and cannot help here.
-- `herdr pane report-agent` registers a pane well enough for `agent list`, the
-  sidebar, `rename`, `get`/`wait`/`focus` — but `agent prompt` and `send-keys`
-  re-verify the foreground process and fail with `agent_not_ready`. Driving the
-  lifecycle from agent hooks cannot restore the input path.
-
-## Unrelated gotcha: a single oddly-tinted pane
-
-If one pane's background goes off-color while its neighbours stay neutral, an app
-inside it set a default background via OSC 11 and never reset it. herdr tracks
-that per pane and carries it to the client, so it is invisible to
-`herdr pane read --format ansi` (which only shows cell SGR) and unrelated to
-agent state. Reset it with `printf '\033]111\033\\'`. If an agent is running
-there, write to the pane's pty **slave** instead — that appears as app output and
-never reaches the agent's stdin:
-
-```sh
-herdr pane process-info --pane <pane_id>   # -> foreground pid
-ls -l /proc/<pid>/fd/0                     # -> /dev/pts/N
-printf '\033]111\033\\' > /dev/pts/N
-```
+The two you will actually meet: `npm update -g tformula` reverts the color patch
+(formulas go blue), and a herdr change to how it identifies a pane's agent would
+break detection (formulas render, pane vanishes from the sidebar).
