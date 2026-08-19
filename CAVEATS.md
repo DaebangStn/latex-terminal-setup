@@ -12,7 +12,44 @@ each entry below leads with the symptom.
 
 ---
 
-## 1. Formulas turn blue again → the tformula patch was reverted
+## 1. A formula renders with pieces missing → Markdown ate the `=` line
+
+**Cause.** Not TFormula. An agent renders its own Markdown *before* the text
+reaches the terminal, and Markdown has a setext heading rule: a line containing
+only `=` turns the paragraph above it into a level-1 heading and is consumed. So a
+display block written like this
+
+```
+$$
+P(\mathrm{overflow}\mid\mathrm{NaN})
+=
+\frac{17}{17}
+=
+1
+$$
+```
+
+reaches the screen as a heading with the `=` lines *deleted*. TFormula then
+faithfully renders the mutilated LaTeX. Recorded in `tformula history` as:
+
+```
+P(\mathrm{overflow}\mid\mathrm{NaN})\n\n\frac{17}{17}\n\n1
+```
+
+The tell is in the cells: the affected lines carry `ESC[1m ESC[4m` (bold +
+underline, i.e. heading styling) and a `# ` prefix, and the `=` lines are blank.
+`-` has the same problem — it is the level-2 setext underline.
+
+**Why it does not reproduce in a bare shell.** `cat`ing the same block through
+`hrmath` renders it perfectly, because there is no Markdown renderer in the path.
+Multi-line bodies, nested-looking sub-formulas, and slow streaming were all tested
+this way and all came back intact. The corruption needs an agent's Markdown stage.
+
+**Fix.** A source-formatting rule, so it lives in the agents' instruction files:
+keep the formula body on a single line and use `\\` for breaks inside the
+formula. See `files/claude-md-snippet.md`.
+
+## 2. Formulas turn blue again → the tformula patch was reverted
 
 **Cause.** The formula image inherits the color of the source *cells*. A
 syntax-highlighted LaTeX block in an agent TUI therefore paints the formula in the
@@ -35,7 +72,7 @@ terminal default foreground, or expose an option. The reader path
 (`reader.js:509`) already does the right thing; only the proxy path
 (`screen.js:2067`) takes the source color.
 
-## 2. Formulas render but the pane is missing from the sidebar → argv[0] detection changed
+## 3. Formulas render but the pane is missing from the sidebar → argv[0] detection changed
 
 **Cause.** herdr identifies a pane's agent from the foreground process's
 **`argv[0]`**, not `comm` — measured: `exec -a claude sleep 300` is detected as
@@ -69,7 +106,7 @@ works:
 Filing a herdr feature request is not currently possible: it has no public issue
 tracker.
 
-## 3. Formulas stop rendering entirely from Windows → ConPTY is back in the path
+## 4. Formulas stop rendering entirely from Windows → ConPTY is back in the path
 
 **Cause.** `wezterm → wsl.exe → ssh` routes through **ConPTY**, which is not a
 pipe but a terminal emulator: it parses the stream, keeps its own screen buffer,
@@ -88,7 +125,7 @@ replies:
 **Fix.** Use WezTerm's built-in SSH client (SETUP.md step 1), which bypasses both
 WSL and ConPTY.
 
-## 4. Formulas stay as raw TeX → fitted scale below the floor
+## 5. Formulas stay as raw TeX → fitted scale below the floor
 
 **Cause.** TFormula keeps a formula as raw TeX when it would render below
 `--min-readable-scale` (default 0.4) of natural size. On a 4K screen a cell is
@@ -102,7 +139,7 @@ line is explicit:
 **Fix.** `hrmath` already defaults it to 0.3. Override per run with
 `HRMATH_MIN_SCALE`.
 
-## 5. Display formulas look too small → the image is bounded by the source's cell rectangle
+## 6. Display formulas look too small → the image is bounded by the source's cell rectangle
 
 **Cause.** TFormula bounds the rendered image to the cell rectangle the source
 text occupies, so a one-line `$$...$$` gets a single row of height and the glyphs
@@ -129,7 +166,7 @@ instruction files: display delimiters go on their own lines. See
 **What an upstream fix would look like.** Let a display formula claim more rows
 than its source occupies, or expose a minimum row count.
 
-## 6. An inline formula "does not render" → several `$...$` on one line got merged
+## 7. An inline formula "does not render" → several `$...$` on one line got merged
 
 **Cause.** TFormula joins several dollar-delimited spans on a single line into one
 formula and wraps the text between them in `\text{}`. MathJax has no CJK glyphs,
@@ -152,7 +189,7 @@ glyphs in the middle. Relevant code: `dollarDelimiterPositions()`
 **Fix.** At most one inline `$...$` per line, and never mixed with CJK prose — put
 formulas in separate display blocks. Encoded in the agents' instruction files.
 
-## 7. Stray little images around a formula → wrapped source in a narrow pane
+## 8. Stray little images around a formula → wrapped source in a narrow pane
 
 **Cause.** When a display formula's raw source wraps across several terminal lines
 in a narrow pane, TFormula also infers fragments of the wrapped text as separate
@@ -166,11 +203,11 @@ display=False | ↓
 ```
 
 Harmless — the display formula itself is fine — but the strays are visible.
-Probably the same root cause as caveat 6.
+Probably the same root cause as caveat 7.
 
 **Fix.** Wider panes for math-heavy output, or shorter formulas.
 
-## 8. Formulas look chewed or partially erased in WezTerm
+## 9. Formulas look chewed or partially erased in WezTerm
 
 **Cause.** WezTerm implements the Kitty graphics protocol only partially: it maps
 an image to cells at placement time, so text later drawn over those cells punches
@@ -181,7 +218,7 @@ Ghostty do not behave this way. Upstream:
 **Fix.** None on our side. This is why local Ghostty is the recommended setup and
 WezTerm is only the remote route.
 
-## 9. `verify.sh` reports `math=false` on a working setup → stdout was redirected
+## 10. `verify.sh` reports `math=false` on a working setup → stdout was redirected
 
 **Cause.** TFormula gates on `isTTY` and needs the terminal to answer the
 cell-size query, so `./verify.sh > log` or piping it makes every render check fail
@@ -190,7 +227,7 @@ that case, but it is worth knowing why.
 
 **Fix.** Run it bare, from a herdr pane.
 
-## 10. One pane's background is oddly tinted — root cause unidentified
+## 11. One pane's background is oddly tinted — root cause unidentified
 
 **Cause.** An app inside that pane set a default background via OSC 11 and never
 reset it. herdr tracks that per pane and carries it to the client

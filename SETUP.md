@@ -165,8 +165,17 @@ retroactively — relaunch it, resuming with `claude --resume <id>` or
 
 ## 6. Tell the agents how to write math
 
-Two formatting rules matter more than any setting, because **TFormula bounds the
-image to the cell rectangle the source occupies**:
+Three formatting rules matter more than any setting:
+
+- **Keep the formula body on a single line.** Never leave `=` or `-` alone on a
+  line inside a display block — the agent's own Markdown renderer reads it as a
+  setext heading underline and *deletes* it before TFormula sees the text, so the
+  formula renders with pieces missing. Use `\\` for breaks inside the formula.
+  This one bites hardest because it never reproduces in a bare shell: `cat`ing the
+  same block renders it perfectly.
+
+The other two follow from **TFormula bounding the image to the cell rectangle the
+source occupies**:
 
 - **Display delimiters go on their own lines.** A one-line `$$...$$` is squeezed
   into a single row and comes out tiny; three lines give it three rows and about

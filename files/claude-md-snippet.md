@@ -6,17 +6,23 @@
   approximations. Check `TFORMULA_ACTIVE=1` if you need to know whether the
   current session has it; when it is unset, fall back to plain Unicode.
 
-- **Put display delimiters on their own lines.** TFormula bounds the rendered
-  image to the cell rectangle the source occupies, so a one-line `$$...$$` is
-  squeezed into a single row and comes out tiny. Three lines give it three rows
-  and roughly 3x the size. Raising `--scale` does not help — it only lowers the
-  fitted ratio inside the same box.
+- **Keep the formula body on a single line.** Never leave `=` or `-` alone on a
+  line inside a display block: your own Markdown renderer reads it as a setext
+  heading underline, turns the lines above it into a heading, and *deletes* the
+  `=` line before TFormula ever sees the text. TFormula then faithfully renders
+  the mutilated LaTeX. Use `\\` if you need a line break inside the formula.
 
   ```
   $$
-  E = mc^2
+  P(\mathrm{overflow}\mid\mathrm{NaN}) = \frac{17}{17} = 1
   $$
   ```
+
+- **Put the display delimiters on their own lines**, as above. TFormula bounds the
+  rendered image to the cell rectangle the source occupies, so a one-line
+  `$$...$$` is squeezed into a single row and comes out tiny; three lines give it
+  three rows and roughly 3x the size. Raising `--scale` does not help — it only
+  lowers the fitted ratio inside the same box.
 
 - **At most one inline `$...$` per line**, and do not mix inline math with Korean
   prose on the same line. TFormula merges several dollar-delimited spans on one
